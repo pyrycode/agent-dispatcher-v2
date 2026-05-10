@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+*.tsbuildinfo
+
+# Test artifacts
+coverage/
+
+# Editor / OS
+.DS_Store
+*.log
+*.swp
+
+# Environment (consumer's .env lives in the agents repo, not here)
+.env
+.env.local
+
+# Codegraph index (per-repo, not committed)
+.codegraph/
+
+# Claude Code runtime artifacts
+.prompt-*
+.system-prompt-*
