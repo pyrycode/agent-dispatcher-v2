@@ -28,6 +28,17 @@ Fix encoded in `shouldFlagEmptyBranch`: flag only when `commitsAhead === 0` AND 
 
 `parseInt("5abc", 10) === 5` — silent truncation. When parsing `git rev-list --count` output (or anything that must be a non-negative integer), prefer a regex check or `Number()` + `Number.isFinite` over `parseInt`. The regression test in `test/pipeline/blockers.test.ts` pins this explicitly so a future "simplification" can't reintroduce the bug.
 
+## GitHub REST
+
+### `PATCH /repos/{o}/{r}/issues/{n}` has replace-set semantics on `labels` (#35)
+
+GitHub's REST `PATCH` on an issue **replaces the full label set** with whatever array is sent — it is not a delta-merge. Two destructive failure modes follow:
+
+1. **`labels: undefined` leakage in the request body.** `JSON.stringify({ body, labels: undefined })` serializes to `{"body":"..."}` (undefined keys are dropped), but a layer that uses a different serializer or an `Object.assign({}, patch)` could produce `labels: null` on the wire — which GitHub interprets as "set labels to empty," silently stripping every label off the issue. In `updateIssue`, build the request body conditionally (`if (patch.labels !== undefined) body.labels = patch.labels`) rather than spreading the patch — and pin it with a deep-equals assertion on the recorded request body.
+2. **Truthiness checks on `patch.body` / `patch.labels`.** `if (patch.body)` treats `""` and `[]` as "not provided," dropping legitimate clear-the-field updates. Use `!== undefined`. The regression guard is a test that `updateIssue(n, { body: "" })` IS a real PATCH (one transport call, body equals `{ body: "" }`), not a no-op.
+
+The same shape rule generalizes to any future REST PATCH wrapper: conditional body assembly, `!== undefined` predicates, deep-equals assertion on the request body in tests.
+
 ## Configuration loading
 
 ### `{...fileEnv, ...process.env}` silently nukes `.env` values on `KEY=""` exports (#3)
