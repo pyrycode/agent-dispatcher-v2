@@ -15,3 +15,15 @@ Gotchas surfaced during implementation. Append-only; don't rewrite history.
 ### `--frozen-lockfile` in CI, plain `pnpm install` locally (#1)
 
 `--frozen-lockfile` is the standard CI guard against silent lockfile drift — it's not a new version pin, just enforcement of the existing lockfile. Use it on every CI install step. Don't add it to local dev docs; devs need to be able to add deps without a CI flag fighting them.
+
+## Pipeline / dispatcher routing
+
+### Empty-branch check must inspect labels, not just commit count (#6)
+
+A naive "no commits on the branch → `error:agent`" check conflates two distinct outcomes: silent agent failure (the agent crashed / stopped without committing) and deliberate bail (the agent intentionally handed back to PO with a `needs-rework:*` label and zero commits). On 2026-05-10 this mis-routed `error:architect` onto relay #26 — the architect had deliberately bailed, and the false `error:*` label triggered a retry that the architect didn't need.
+
+Fix encoded in `shouldFlagEmptyBranch`: flag only when `commitsAhead === 0` AND no `needs-rework:*` label is present. The label-prefix check is the disambiguator. Any future predicate that reasons about "did the agent actually do work" must consult labels for intent, not just the branch state.
+
+### Use `/^\d+$/` over `parseInt` when parsing counts (#6)
+
+`parseInt("5abc", 10) === 5` — silent truncation. When parsing `git rev-list --count` output (or anything that must be a non-negative integer), prefer a regex check or `Number()` + `Number.isFinite` over `parseInt`. The regression test in `test/pipeline/blockers.test.ts` pins this explicitly so a future "simplification" can't reintroduce the bug.
