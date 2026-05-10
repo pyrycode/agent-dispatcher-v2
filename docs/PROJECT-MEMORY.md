@@ -42,6 +42,17 @@ Evergreen project state for `agent-dispatcher-v2`. Updated as tickets land. Per-
 - `shouldProduceCommits(agent, action)` is the explicit table of which agent-runs must produce commits. Exhaustive `switch` on `AgentName` (no `default`) gives a TS error when a new agent is added — load-bearing exhaustiveness check.
 - Helpers stay unexported until a second consumer appears (e.g. `hasNeedsReworkLabel`). Promoting preemptively buys nothing and adds API surface to refactor when the rule generalizes.
 
+### Transition table (#24)
+
+- `src/pipeline/transitions.ts` is **data only** — no functions, no logic. Four exported types (`Column`, `Label`, `LabelPattern`, `Transition`) and two exported constants (`COLUMNS`, `TRANSITIONS`). Consumers (`decideLabelDelta` in #5, rework routing in #7) import directly; no `src/index.ts` re-export.
+- `Label` and `LabelPattern` are intentionally narrow per the #6 narrow-types rule — only labels that some transition's `requires` actually consumes are members. `wip:*`, `error:*`, `size:*`, `priority:*`, `security-sensitive` are dispatcher-run lifecycle / metadata, not transition triggers, and stay out until a transition consumes one. Widen at that point, not preemptively.
+- `LabelPattern` (`"ready:*"`, `"needs-rework:*"`) is a closed set with the same narrow-types rule: only patterns whose underlying labels can actually gate a transition belong here. The dead-letter test (`strips` patterns must match a label produced by some `requires`) is what enforces it.
+- **Same-column rework rows are deliberate, not bugs.** `In Architecture → In Architecture` (and the developer / code-review variants) appear because the column doesn't change but the labels do, and `decideLabelDelta` is the only place labels mutate. Without these rows, #5 would have to special-case label-only transitions outside the table.
+- **`Inbox → Backlog` row has empty `requires`.** It's a manual human-triage move. Without it the reachability test fails for every column except Inbox, since nothing else routes out of Inbox.
+- Forward auto-advance rows have empty `strips` (matches v1's `runAutoAdvance` "no strip" semantics). Done + rework rows strip `ready:*` + `needs-rework:*` so the target re-runs on a clean slate.
+- Three invariant tests in `test/pipeline/transitions.test.ts` are the verification: reachability from Inbox, `from`/`to` membership in `Column`, and no dead-letter `strips` patterns. There's no integration target — consumers land in their own tickets and get behavioral tests there.
+- No `needs-rework:documentation` row(s) yet — no observed transition routes back into documentation as a rework target. If a future ticket needs it, widen the `Label` union and add the row.
+
 ## Open follow-ups
 
 - Add `"packageManager": "pnpm@x.y.z"` to `package.json` as the single source of truth for pnpm version, then drop the workflow's `version: 9`. Deferred from #1 because that ticket forbade new pins to `package.json`.
