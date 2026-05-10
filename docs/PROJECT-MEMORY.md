@@ -44,7 +44,7 @@ Evergreen project state for `agent-dispatcher-v2`. Updated as tickets land. Per-
 
 ### Transition table (#24)
 
-- `src/pipeline/transitions.ts` is **data only** — no functions, no logic. Three exported types (`Column`, `Label`, `LabelPattern`, plus `Transition`) and two exported constants (`COLUMNS`, `TRANSITIONS`). Consumers (`decideLabelDelta` in #5, rework routing in #7) import directly; no `src/index.ts` re-export.
+- `src/pipeline/transitions.ts` is **data only** — no functions, no logic. Four exported types (`Column`, `Label`, `LabelPattern`, `Transition`) and two exported constants (`COLUMNS`, `TRANSITIONS`). Consumers (`decideLabelDelta` in #5, rework routing in #7) import directly; no `src/index.ts` re-export.
 - `Label` and `LabelPattern` are intentionally narrow per the #6 narrow-types rule — only labels that some transition's `requires` actually consumes are members. `wip:*`, `error:*`, `size:*`, `priority:*`, `security-sensitive` are dispatcher-run lifecycle / metadata, not transition triggers, and stay out until a transition consumes one. Widen at that point, not preemptively.
 - `LabelPattern` (`"ready:*"`, `"needs-rework:*"`) is a closed set with the same narrow-types rule: only patterns whose underlying labels can actually gate a transition belong here. The dead-letter test (`strips` patterns must match a label produced by some `requires`) is what enforces it.
 - **Same-column rework rows are deliberate, not bugs.** `In Architecture → In Architecture` (and the developer / code-review variants) appear because the column doesn't change but the labels do, and `decideLabelDelta` is the only place labels mutate. Without these rows, #5 would have to special-case label-only transitions outside the table.
