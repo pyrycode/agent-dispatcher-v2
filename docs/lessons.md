@@ -27,3 +27,11 @@ Fix encoded in `shouldFlagEmptyBranch`: flag only when `commitsAhead === 0` AND 
 ### Use `/^\d+$/` over `parseInt` when parsing counts (#6)
 
 `parseInt("5abc", 10) === 5` — silent truncation. When parsing `git rev-list --count` output (or anything that must be a non-negative integer), prefer a regex check or `Number()` + `Number.isFinite` over `parseInt`. The regression test in `test/pipeline/blockers.test.ts` pins this explicitly so a future "simplification" can't reintroduce the bug.
+
+## Configuration loading
+
+### `{...fileEnv, ...process.env}` silently nukes `.env` values on `KEY=""` exports (#3)
+
+The spec called for a naive `{ ...fileEnv, ...process.env }` merge in `loadConfig`. The hazard: an explicit `export KEY=""` in the launcher's shell (or a CI secret that resolves to empty) overwrites a real value from `.env` with `""`, which `parseConfig` then sees as "unset" — producing either a "missing required" throw or a silent fallback to a default, *despite the value being correctly set in `.env`*.
+
+Fix: filter empty strings out of `process.env` *before* merging. Empty in `process.env` reads as "no opinion, defer to `.env`," matching the empty-string-as-unset convention already used inside `parseConfig`. The deviation from the spec is intentional and called out in a comment on `loadConfig`. Any future tweak to the merge logic must preserve this filter; without it, a CI run with a stray empty export will fail in a way that's hard to diagnose because the `.env` file *looks* correct.
