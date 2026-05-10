@@ -55,6 +55,17 @@ Evergreen project state for `agent-dispatcher-v2`. Updated as tickets land. Per-
 - Three invariant tests in `test/pipeline/transitions.test.ts` are the verification: reachability from Inbox, `from`/`to` membership in `Column`, and no dead-letter `strips` patterns. There's no integration target — consumers land in their own tickets and get behavioral tests there.
 - No `needs-rework:documentation` row(s) yet — no observed transition routes back into documentation as a rework target. If a future ticket needs it, widen the `Label` union and add the row.
 
+### src/pipeline/ selection (#30)
+
+- `src/pipeline/selection.ts` lands the `selectDispatches.cap` term of CLAUDE.md's throughput equation. Pure function: walks `state.items` in caller-supplied order, skips ineligible (wip:* / open-blocker / non-consumed-column), early-`break`s at `result.length >= maxConcurrent`. `maxConcurrent <= 0` short-circuits to `[]` — no-op on negative input matches v1's permissive shape.
+- `Agent` (column-consumer union) is **distinct from `AgentName`** in `blockers.ts` (commit-producer union) by design. `Agent` includes `"po"` (Backlog consumer); `AgentName` excludes it (PO triages, doesn't run with a worktree). Per the #6 narrow-types rule, each pipeline module owns its narrow type for its narrow concern. Two parallel narrow unions overlapping by four members is correct, not duplication — promote to a shared union only when a third caller genuinely needs both.
+- `AGENT_COLUMN_MAP` is encoded as data, not derived from `TRANSITIONS`. "Label gates this transition" and "agent consumes this column" are distinct concerns; deriving would couple a future label rename (e.g. `ready:po` → `triaged:po`) into selection. Inbox and Done are absent — items in those columns have no consuming agent and are silently skipped (Inbox→Backlog is manual human triage; Done is terminal).
+- `DispatchTuple` is minimal `{ agent, issueNumber }`. The dispatcher builds the worktree from the issue number — widening to the full `SelectionItem` would speculate on a hypothetical future consumer (the loop module hasn't landed). If a downstream caller needs more, it has the original `state.items` array in scope.
+- Per-issue label scoping is **structural**: each loop iteration reads only `item.labels` / `item.blockers`, so item B's labels are physically out of scope when deciding item A. The paired tests (gated A + ungated B → result contains only B) verify this.
+- `hasWipLabel` is prefix match (`startsWith("wip:")`), mirroring `hasNeedsReworkLabel` in `blockers.ts`. Regression-tested: `something-wip:bar` does NOT trigger. Same shape rule established in #6 — substring matches are bug magnets.
+- `isEligible` is the one place gates compose; new pipeline gates add a line there. Stays unexported until a third consumer (beyond `selectDispatches`) appears.
+- `selectDispatches` does NOT throw on items in unmapped columns (Inbox, Done) or on items missing labels/blockers — TypeScript types are the contract; defensive `?? []` widening would mask caller bugs at the I/O boundary. Same stance as `blockers.ts`.
+
 ### src/github/ I/O surface (#19)
 
 - `src/github/` is the I/O edge for GitHub Projects v2. `project-client.ts` is the single initialization surface; sibling files (`issues.ts` in #20, `labels.ts` in #21) and the loop will receive a `GitHubProjectClient` via DI rather than reaching for a global. No file under `src/pipeline/` may import from `src/github/` — that direction is the seam between pure decisions and live state.
