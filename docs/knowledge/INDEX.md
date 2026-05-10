@@ -9,6 +9,7 @@ One-line summaries. Add an entry whenever a new doc lands under `features/`, `de
 ## Decisions
 
 - [ADR 0001 — pnpm version pinned in workflow YAML](decisions/0001-pnpm-version-in-workflow.md) — pnpm major pinned in CI, not in `package.json`. Reasoning behind the choice and the cleaner follow-up.
+- [ADR 0002 — `SALVAGE_GATES` defaults to empty](decisions/0002-salvage-gates-default-empty.md) — salvage is opt-in; no consumer-stack assumption baked into the dispatcher's default.
 
 ## Architecture
 
