@@ -51,6 +51,20 @@ The cost is two calls instead of one. Acceptable: the dispatcher is single-threa
 
 The same shape rule generalizes: prefer "read state, decide, write" over "write speculatively, catch the typed failure" whenever the typing of the failure isn't part of the wrapper's public contract.
 
+### Surface conflict as a typed value, not a thrown error (#41)
+
+GitHub's `mergePullRequest` GraphQL mutation rejects with a thrown error when the target PR has merge conflicts (`"Pull Request is not mergeable: this branch has conflicts that must be resolved"`). The naive wrapper just lets that propagate — same posture as every other `src/github/` op.
+
+That's wrong for this op. The dispatcher's auto-merge path looks like: `runAutoAdvance` flips Status to Done as soon as `ready:documentation` lands → `runAutoMerge` calls `mergePr` → if the merge fails, the loop must roll Status back from Done → In Code Review and label `error:merge-conflict` for human triage. v1 lesson 2026-05-09 evening: without rollback the dispatcher swallows the merge failure, treats the ticket as Done forever, and the PR sits unmerged.
+
+If `mergePr` throws, every caller has to `try/catch` and substring-match the error message to decide whether to roll status back. That duplicates the classification logic across every consumer — and the consumers are exactly the places where forgetting to catch produces the silent-stuck-Done failure mode. So `mergePr` returns `{ merged: true } | { merged: false, reason: "conflict" | "other", error }` and never throws. The substring-classification (lowercase + match `"not mergeable"`, `"merge conflict"`, `"conflict"`) lives in one well-tested place; consumers branch on the discriminant.
+
+The try/catch wraps the entire method body, not just the mutation, so resolution failures (PR not found) also surface typed. One method, one return contract — strict reading of the AC. Pre-flight resolution errors don't misroute as conflict because their message lacks any conflict token.
+
+Two design forces pushed the substring-match over a pre-flight `pullRequest(number:N){mergeable}` query: (1) the hot path is "merge succeeds" and a pre-flight adds a round-trip on every success, and (2) the fragility against GitHub message-wording drift is bounded — a future drift breaks a test in CI, not in production. Lowercase normalization + a conservative token set covers the observed variants.
+
+The same shape rule generalizes: when a wrapper's failure has a structured downstream consequence (rollback, alternate path, retry-with-state-change) AND the failure mode is detectable from the error shape, surface it as a typed return rather than a throw. Throws are right when the wrapper's contract is "absence of error means success and the caller has nothing to do on failure but report"; typed results are right when the caller has work to do on each failure mode and you don't want to push the discrimination logic to every consumer.
+
 ## Configuration loading
 
 ### `{...fileEnv, ...process.env}` silently nukes `.env` values on `KEY=""` exports (#3)
