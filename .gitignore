@@ -18,7 +18,9 @@ coverage/
 .env.local
 
 # Codegraph index (per-repo, not committed)
-.codegraph/
+# No trailing slash: matches both the directory form and the symlink form
+# the dispatcher creates in worktrees.
+.codegraph
 
 # Claude Code runtime artifacts
 .prompt-*
