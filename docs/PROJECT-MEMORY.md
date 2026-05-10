@@ -41,6 +41,8 @@ Evergreen project state for `agent-dispatcher-v2`. Updated as tickets land. Per-
 - `parseCommitsAhead` throws on malformed input rather than returning `-1` / `null` — the dispatcher catches at the I/O boundary. Use a `/^\d+$/` regex over `parseInt` to avoid silent truncation of inputs like `"5abc"`.
 - `shouldProduceCommits(agent, action)` is the explicit table of which agent-runs must produce commits. Exhaustive `switch` on `AgentName` (no `default`) gives a TS error when a new agent is added — load-bearing exhaustiveness check.
 - Helpers stay unexported until a second consumer appears (e.g. `hasNeedsReworkLabel`). Promoting preemptively buys nothing and adds API surface to refactor when the rule generalizes.
+- Policy thresholds from `CLAUDE.md` (e.g. `XS_MAX_PRODUCTION_LINES = 30`, `S_MAX_PRODUCTION_LINES = 100` in `sizing.ts` (#25)) are exported as named constants and pinned by their own test assertions. The constant-pinning tests sit alongside boundary-pinning tests — if a future change drifts both the constant and the boundary cases in lockstep, the constant assertion still anchors the policy value. Any predicate that encodes a CLAUDE.md-documented number should follow this shape.
+- Set-intersection-style predicates (e.g. `fileOverlapsAny` in `sizing.ts` (#25)) use exact string equality. No path normalization, case folding, or glob matching inside the predicate — caller canonicalises at the I/O boundary. Add normalization only when an observed real-world mismatch demands it.
 
 ### Transition table (#24)
 
