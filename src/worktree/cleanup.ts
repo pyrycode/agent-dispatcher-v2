@@ -71,25 +71,23 @@ export async function removeWorktree(path: string, spawn: Subprocess): Promise<v
 
 // Pure parser — exported for unit testing without the seam. Splits porcelain
 // output into blank-line-separated paragraphs and walks each block's lines
-// looking for `worktree <p>`. Returns targetPath when found exactly (the
-// common case — `git worktree list` echoes the path the caller gave to
-// `git worktree add`); otherwise returns the first `worktree <p>` line's
-// path as the orphan-candidate, or null if the porcelain has no worktree
-// entries at all. The fallback handles the create-time collision shape
-// where the registered path differs from the target (e.g. canonicalised
-// or inherited from an earlier dispatch). Exact equality on the primary
-// match — no path normalisation per #6 set-intersection-style-predicates.
+// looking for `worktree <p>`; returns `targetPath` when an entry's path
+// equals it exactly, else null. Exact equality, no path normalisation per
+// #6 set-intersection-style-predicates — `git worktree list` echoes the
+// path the caller gave to `git worktree add`. NO fallback to "first entry":
+// the first porcelain block is conventionally the repository's main
+// worktree, and a fallback would let `removeWorktree` force-remove the
+// main repo on a parser miss. Locate-by-branch (the AC's "or registered
+// branch" half) is a future extension the create-collision callsite will
+// drive once it has a branch name to pass.
 export function findCollidingWorktree(porcelain: string, targetPath: string): string | null {
-  let firstPath: string | null = null;
   for (const block of porcelain.split(/\r?\n\r?\n/)) {
     for (const line of block.split(/\r?\n/)) {
       if (!line.startsWith("worktree ")) continue;
-      const p = line.slice("worktree ".length);
-      if (p === targetPath) return targetPath;
-      if (firstPath === null) firstPath = p;
+      if (line.slice("worktree ".length) === targetPath) return targetPath;
     }
   }
-  return firstPath;
+  return null;
 }
 
 async function pathExists(p: string): Promise<boolean> {

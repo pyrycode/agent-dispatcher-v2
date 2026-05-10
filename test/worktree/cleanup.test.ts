@@ -98,32 +98,24 @@ describe("removeWorktree", () => {
     expect(t.calls[2]).toEqual(["git", "worktree", "remove", "--force", tmp]);
   });
 
-  it("retry-still-fails surfaces stderr verbatim", async () => {
-    // Orphan path P' is fictitious — the subprocess seam is mocked, so it
-    // doesn't need to exist on disk. The target `tmp` exists (real dir),
-    // its remove fails, the parser locates P', force on P' succeeds, then
-    // the retry of the original remove on `tmp` fails — the AC branch.
-    const orphan = "/nonexistent/orphan-worktree-path";
-    const canary = "CANARY: still locked\n";
+  it("collision then `git worktree list` fails — surfaces stderr verbatim", async () => {
+    // The AC's "retry-still-fails surfaces error verbatim" branch is
+    // unreachable today: with exact-match-or-null on findCollidingWorktree,
+    // a non-null conflict always equals the target path, so the
+    // `conflict === path` short-circuit fires and the retry never runs.
+    // That branch only becomes reachable once the locate-by-branch half of
+    // the AC lands at the create-collision callsite (separate ticket).
+    // Until then, this test exercises a reachable error branch with the
+    // same verbatim-stderr posture: list-after-collision failing.
+    const canary = "CANARY: list refused";
     const t = makeSpawn([
       {
         match: argvEq(["git", "worktree", "remove", tmp]),
-        respond: () => {
-          // First call (bare) fails; second call (retry) also fails with
-          // the canary stderr the test pins on.
-          if (t.calls.filter((c) => argvEq(["git", "worktree", "remove", tmp])(c)).length === 1) {
-            return fail("fatal: locked");
-          }
-          return fail(canary);
-        },
+        respond: () => fail("fatal: locked working tree"),
       },
       {
         match: argvEq(["git", "worktree", "list", "--porcelain"]),
-        respond: () => ok(porcelainBlock(orphan)),
-      },
-      {
-        match: argvEq(["git", "worktree", "remove", "--force", orphan]),
-        respond: () => ok(),
+        respond: () => fail(canary),
       },
     ]);
     let caught: unknown;
@@ -133,11 +125,8 @@ describe("removeWorktree", () => {
       caught = err;
     }
     expect(caught).toBeInstanceOf(Error);
-    // `.trim()` strips the trailing newline per design — "verbatim" in the
-    // AC means the operator sees the original git error string, not noise.
-    expect((caught as Error).message).toContain("CANARY: still locked");
-    // Calls: r1 (fail), list, force on orphan, r2 (fail) — four total.
-    expect(t.calls.length).toBe(4);
+    expect((caught as Error).message).toContain(canary);
+    expect(t.calls.length).toBe(2);
   });
 });
 
@@ -154,12 +143,13 @@ describe("findCollidingWorktree", () => {
     expect(findCollidingWorktree("", "/some/path")).toBeNull();
   });
 
-  it("no exact match — falls back to the first worktree entry as orphan candidate", () => {
-    // The create-time collision shape: the registered path differs from
-    // the target (e.g. inherited from a dead earlier dispatch). Returning
-    // the first entry lets the recovery force-remove it.
-    const orphan = "/Users/foo/.pyrycode-worktrees/architect-43";
-    const porcelain = porcelainBlock(orphan, "refs/heads/feature/43");
-    expect(findCollidingWorktree(porcelain, "/some/other/path")).toBe(orphan);
+  it("no exact match — returns null (no first-entry fallback; first block is the main repo)", () => {
+    // First-block fallback would let removeWorktree force-remove the main
+    // repository worktree on a parser miss. Exact-match-or-null is the
+    // safe contract; locate-by-branch is a future extension.
+    const porcelain =
+      `${porcelainBlock("/Users/foo/repo", "refs/heads/main")}\n` +
+      `${porcelainBlock("/Users/foo/.pyrycode-worktrees/other-77", "refs/heads/feature/77")}`;
+    expect(findCollidingWorktree(porcelain, "/some/other/path")).toBeNull();
   });
 });
