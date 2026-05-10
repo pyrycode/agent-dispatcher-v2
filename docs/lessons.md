@@ -39,6 +39,18 @@ GitHub's REST `PATCH` on an issue **replaces the full label set** with whatever 
 
 The same shape rule generalizes to any future REST PATCH wrapper: conditional body assembly, `!== undefined` predicates, deep-equals assertion on the request body in tests.
 
+### `removeLabel` idempotency: GET-then-PUT, not DELETE-with-catch (#36)
+
+GitHub exposes both `DELETE /repos/{o}/{r}/issues/{n}/labels/{name}` (returns 404 when the label is absent) and `PUT /repos/{o}/{r}/issues/{n}/labels` (replace-set). The first sounds like the natural fit for `removeLabel` — until you ask how the wrapper makes "already absent" idempotent.
+
+A `DELETE` + `try { ... } catch (e) { if (e.status === 404) return; throw e; }` shape compiles, but it couples the wrapper to a transport implementation detail (the error's `status` field) that the `RestTransport` contract intentionally doesn't expose. The transport is `(method, path, body?) => Promise<unknown>`; the rejection shape is whatever the launcher's HTTP client throws. A future swap — `gh api` shell-out vs `@octokit/rest` vs `fetch` — produces structurally different errors, and the wrapper's idempotency would silently break in CI nowhere near the swap site.
+
+GET-then-PUT-only-if-present makes idempotency fall out of a `.filter()`: read the current set, return early if the label isn't in it, otherwise PUT the filtered set. The transport stays opaque (any rejection propagates verbatim — a 401 won't be misread as "label not present"), and the test pins zero mutating calls in the absent case by registering no PUT route, so a future "always PUT for symmetry" simplification fails the suite immediately.
+
+The cost is two calls instead of one. Acceptable: the dispatcher is single-threaded per ticket so the read/write race is not load-bearing, and the salvage flow's failure mode (silently re-dispatched salvage PR) is far worse than an extra GET.
+
+The same shape rule generalizes: prefer "read state, decide, write" over "write speculatively, catch the typed failure" whenever the typing of the failure isn't part of the wrapper's public contract.
+
 ## Configuration loading
 
 ### `{...fileEnv, ...process.env}` silently nukes `.env` values on `KEY=""` exports (#3)

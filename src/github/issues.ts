@@ -14,7 +14,7 @@
 // JSON-encode the body and set Content-Type: application/json. Implementations
 // MUST throw / reject on non-2xx responses; this module does not catch.
 export type RestTransport = (
-  method: "GET" | "POST" | "PATCH",
+  method: "GET" | "POST" | "PATCH" | "PUT",
   path: string,
   body?: Record<string, unknown>,
 ) => Promise<unknown>;
