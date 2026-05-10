@@ -17,8 +17,17 @@ coverage/
 .env
 .env.local
 
-# Codegraph index (per-repo, not committed)
-.codegraph/
+# CodeGraph index — local code-intel cache for interactive sessions.
+# Anchored, no trailing slash: matches both directories AND symlinks.
+# Why: the dispatcher creates a worktree-local `.codegraph` SYMLINK
+# pointing at the canonical index in the agents repo. Trailing-slash
+# patterns (`.codegraph/`) only match directories, so the symlink slips
+# past gitignore and the architect's auto-commit safety net (`git add
+# -A`) bakes the absolute-path symlink into every PR. Surfaced 2026-05-10
+# on tickets #1, #2 — code-review FAIL'd the loop until this fix landed.
+# Same shape as v1's pyrycode/pyrycode commit 30f3d53 + dispatcher
+# repo's a2af416.
+/.codegraph
 
 # Claude Code runtime artifacts
 .prompt-*
