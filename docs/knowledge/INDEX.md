@@ -13,7 +13,7 @@ One-line summaries. Add an entry whenever a new doc lands under `features/`, `de
 
 ## Architecture
 
-*(none yet — first `src/` ticket will seed `architecture/system-overview.md`)*
+*(none yet — seed `architecture/system-overview.md` when cross-cutting structure needs prose; per-ticket codebase summaries cover module-local concerns)*
 
 ## Per-ticket implementation summaries
 
