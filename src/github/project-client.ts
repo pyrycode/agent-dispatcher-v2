@@ -28,6 +28,10 @@ export interface ProjectItem {
   readonly status: string;
   readonly labels: readonly string[];
   readonly url: string;
+  // GraphQL Issue.state enum — "OPEN" | "CLOSED" (uppercase). Empty string
+  // sentinel on missing/malformed response — neither value, so any predicate
+  // gated on "CLOSED" / "OPEN" skips it (safer than defaulting to either).
+  readonly state: string;
 }
 
 export interface InitializeOpts {
@@ -47,7 +51,10 @@ export type GraphQLTransport = (
 const INIT_QUERY = (f: "organization" | "user"): string =>
   `query($owner:String!,$number:Int!){${f}(login:$owner){projectV2(number:$number){id fields(first:30){nodes{... on ProjectV2SingleSelectField{id name options{id name}}}}}}}`;
 
-const ITEMS_QUERY = `query($projectId:ID!,$cursor:String){node(id:$projectId){... on ProjectV2{items(first:100,after:$cursor,orderBy:{field:POSITION,direction:ASC}){pageInfo{hasNextPage endCursor}nodes{id fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}content{... on Issue{number title url labels(first:10){nodes{name}}}}}}}}}`;
+const ITEMS_QUERY = `query($projectId:ID!,$cursor:String){node(id:$projectId){... on ProjectV2{items(first:100,after:$cursor,orderBy:{field:POSITION,direction:ASC}){pageInfo{hasNextPage endCursor}nodes{id fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}content{... on Issue{number title url state labels(first:10){nodes{name}}}}}}}}}`;
+
+const SET_STATUS_MUTATION =
+  "mutation($projectId:ID!,$itemId:ID!,$fieldId:ID!,$optionId:String!){updateProjectV2ItemFieldValue(input:{projectId:$projectId,itemId:$itemId,fieldId:$fieldId,value:{singleSelectOptionId:$optionId}}){projectV2Item{id}}}";
 
 interface StatusFieldNode {
   readonly id: string;
@@ -71,6 +78,7 @@ interface ItemNode {
     readonly number?: unknown;
     readonly title?: unknown;
     readonly url?: unknown;
+    readonly state?: unknown;
     readonly labels?: { readonly nodes?: readonly { readonly name?: unknown }[] };
   } | null;
 }
@@ -122,6 +130,23 @@ export class GitHubProjectClient {
     return new GitHubProjectClient(transport, project.id, statusField.id, optionMap);
   }
 
+  // setItemStatus takes the project-item id (NOT issue number; mixing
+  // yields `Could not resolve to a node`) and resolves the option id via
+  // the cached `statusOptionIdsByName` map from `initialize` — no
+  // round-trip, no fallback. Unknown status name throws with the name.
+  async setItemStatus(itemId: string, statusName: string): Promise<void> {
+    const optionId = this.statusOptionIdsByName.get(statusName);
+    if (!optionId) {
+      throw new Error(`setItemStatus: no Status option named "${statusName}"`);
+    }
+    await this.transport(SET_STATUS_MUTATION, {
+      projectId: this.projectId,
+      itemId,
+      fieldId: this.statusFieldId,
+      optionId,
+    });
+  }
+
   async listItemsInBoardOrder(): Promise<readonly ProjectItem[]> {
     const out: ProjectItem[] = [];
     let cursor: string | null = null;
@@ -167,5 +192,6 @@ function mapItem(node: ItemNode): ProjectItem | null {
     url: typeof content.url === "string" ? content.url : "",
     status,
     labels,
+    state: typeof content.state === "string" ? content.state : "",
   };
 }

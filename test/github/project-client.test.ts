@@ -51,7 +51,7 @@ function projectInitNode(extraFields: unknown[] = []) {
   };
 }
 
-function issueNode(num: number, status = "Backlog", labels: string[] = []) {
+function issueNode(num: number, status = "Backlog", labels: string[] = [], state = "OPEN") {
   return {
     id: `PVTI_${num}`,
     fieldValueByName: { name: status },
@@ -59,6 +59,7 @@ function issueNode(num: number, status = "Backlog", labels: string[] = []) {
       number: num,
       title: `Issue ${num}`,
       url: `https://example.test/${num}`,
+      state,
       labels: { nodes: labels.map((name) => ({ name })) },
     },
   };
@@ -272,7 +273,7 @@ describe("GitHubProjectClient.listItemsInBoardOrder", () => {
     expect(items.length).toBe(1);
     const item = items[0] as ProjectItem;
     expect(Object.keys(item).sort()).toEqual(
-      ["id", "issueNumber", "labels", "status", "title", "url"].sort(),
+      ["id", "issueNumber", "labels", "state", "status", "title", "url"].sort(),
     );
     expect(item.id).toBe("PVTI_42");
     expect(item.issueNumber).toBe(42);
@@ -280,6 +281,51 @@ describe("GitHubProjectClient.listItemsInBoardOrder", () => {
     expect(item.url).toBe("https://example.test/42");
     expect(item.status).toBe("In Development");
     expect(item.labels).toEqual(["ready:developer", "size:S"]);
+    expect(item.state).toBe("OPEN");
+  });
+
+  it("maps Issue.state — CLOSED issues are surfaced verbatim", async () => {
+    const t = makeTransport([
+      initOrgRoute,
+      {
+        match: (q) => q.includes("orderBy:"),
+        respond: () => itemsPage([issueNode(7, "In Code Review", [], "CLOSED")]),
+      },
+    ]);
+    const client = await GitHubProjectClient.initialize(
+      { owner: "pyrycode", project: 7, ownerType: "organization" },
+      t.fn,
+    );
+    const items = await client.listItemsInBoardOrder();
+    expect(items[0]?.state).toBe("CLOSED");
+  });
+
+  it("defaults state to the empty-string sentinel on missing/malformed response", async () => {
+    const node = {
+      id: "PVTI_88",
+      fieldValueByName: { name: "Backlog" },
+      content: {
+        number: 88,
+        title: "No-state",
+        url: "https://example.test/88",
+        labels: { nodes: [] },
+      },
+    };
+    const t = makeTransport([
+      initOrgRoute,
+      {
+        match: (q) => q.includes("orderBy:"),
+        respond: () => itemsPage([node]),
+      },
+    ]);
+    const client = await GitHubProjectClient.initialize(
+      { owner: "pyrycode", project: 7, ownerType: "organization" },
+      t.fn,
+    );
+    const items = await client.listItemsInBoardOrder();
+    // Empty string is neither "OPEN" nor "CLOSED" — safer than defaulting
+    // to either enum value, because every state-gated predicate skips it.
+    expect(items[0]?.state).toBe("");
   });
 
   it("falls back to a 'no-status' sentinel when fieldValueByName is null", async () => {
@@ -307,5 +353,53 @@ describe("GitHubProjectClient.listItemsInBoardOrder", () => {
     const items = await client.listItemsInBoardOrder();
     expect(items.length).toBe(1);
     expect(items[0]?.status).toBe("no-status");
+  });
+});
+
+describe("GitHubProjectClient.setItemStatus", () => {
+  // Init route exposes Status options "Backlog" + "In Development" via
+  // STATUS_FIELD, with field id "FIELD_STATUS". The mutation should route
+  // those names to "OPT_BACKLOG" / "OPT_IN_DEV" with no extra GraphQL hop.
+  const setStatusRoute: Route = {
+    match: (q) => q.includes("updateProjectV2ItemFieldValue(input:"),
+    respond: () => ({ updateProjectV2ItemFieldValue: { projectV2Item: { id: "PVTI_x" } } }),
+  };
+
+  it("invokes updateProjectV2ItemFieldValue with the cached project/field/option ids", async () => {
+    const t = makeTransport([initOrgRoute, setStatusRoute]);
+    const client = await GitHubProjectClient.initialize(
+      { owner: "pyrycode", project: 7, ownerType: "organization" },
+      t.fn,
+    );
+    await client.setItemStatus("PVTI_42", "In Development");
+    const mutationCalls = t.calls.filter((c) =>
+      c.query.includes("updateProjectV2ItemFieldValue(input:"),
+    );
+    expect(mutationCalls.length).toBe(1);
+    // Load-bearing: deep-equals pins the variable shape, including
+    // itemId == project-item-id (not issue number) and optionId resolved
+    // from the cached `statusOptionIdsByName` map.
+    expect(mutationCalls[0]?.variables).toEqual({
+      projectId: "PVT_x",
+      itemId: "PVTI_42",
+      fieldId: "FIELD_STATUS",
+      optionId: "OPT_IN_DEV",
+    });
+  });
+
+  it("throws naming the missing option when the status name is unknown", async () => {
+    const t = makeTransport([initOrgRoute]);
+    const client = await GitHubProjectClient.initialize(
+      { owner: "pyrycode", project: 7, ownerType: "organization" },
+      t.fn,
+    );
+    await expect(client.setItemStatus("PVTI_42", "Done")).rejects.toThrow(
+      /no Status option named "Done"/,
+    );
+    // No transport call past init — the failure is local to the cached map.
+    const mutationCalls = t.calls.filter((c) =>
+      c.query.includes("updateProjectV2ItemFieldValue(input:"),
+    );
+    expect(mutationCalls.length).toBe(0);
   });
 });
