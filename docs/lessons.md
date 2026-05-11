@@ -79,6 +79,24 @@ The general rule: when a parser feeds a destructive operation, prefer a narrow, 
 
 This is the same shape rule as #6's "use `/^\d+$/` over `parseInt`" lesson: prefer "throws / returns null on ambiguous input" over "silently produces a plausible-looking value." Both fail loudly upstream rather than producing a false-positive that propagates downstream into an irreversible action.
 
+## Cross-repo tickets
+
+### Edits to sibling repos must happen outside the worktree (#16)
+
+Ticket #16's deliverable was edits to `pyrycode/agent-dispatcher-v2-agents` — a sibling repo, not this one. The dispatcher's auto-commit safety net (CLAUDE.md "Belt-and-suspenders") runs unconditionally inside the worktree and commits *everything* present to the ticket's branch. Cloning the sibling repo at `./agents/` (or anywhere under the worktree root) would have committed the entire sibling repo's contents onto `feature/16` and pushed it.
+
+The safe pattern is to clone the sibling repo somewhere unrelated to the worktree path (the spec used `/tmp/agent-dispatcher-v2-agents-edit`), branch + edit + PR there, and leave the worktree containing only the spec. The ticket's PR-of-record lives in the sibling repo; this repo's `feature/16` carries the architect's spec and a per-ticket codebase summary, nothing more.
+
+General rule for any future cross-repo ticket: the worktree must NOT contain the sibling repo. Use a scratch directory under `/tmp` (or anywhere outside `$PWD`), and reference the sibling-repo PR URL in the issue comment so the dispatcher's reviewer can find it.
+
+### Incident references ARE the lessons; don't paraphrase them (#16)
+
+The agent CLAUDE.md files carry numbered incident references like "Pyrycode #29 (interface rename across 5 test files…)" and "Pyrycode #55 burned 84% of its 50-turn budget…". The natural reflex during a language-flip audit is to soften or generalize these alongside the toolchain examples — "Pyrycode #29" sounds Pyrycode-specific, "burned 84% of its 50-turn budget" reads as historical.
+
+The audit explicitly preserved them verbatim, including the Go-flavoured paths embedded in their descriptions (`internal/sessions/pool_test.go`, `internal/update`). Reason: the incidents are *what makes the lessons load-bearing*. A bullet that says "sizing matters" is advisory; a bullet that says "Pyrycode #45, sized M, 5-file cross-package, burned the turn budget" is a concrete prior failure the next agent can recognize. Stripping the specifics turns the doc into generic prose.
+
+The rule generalizes to any future ported-agent doc work: distinguish "example used to teach the concept" (replaceable with a local analogue) from "incident that justifies the rule" (preserve verbatim, even if the surrounding language shifts). When in doubt, ask whether removing the reference weakens the rule's authority. If yes, keep it.
+
 ## Configuration loading
 
 ### `{...fileEnv, ...process.env}` silently nukes `.env` values on `KEY=""` exports (#3)
