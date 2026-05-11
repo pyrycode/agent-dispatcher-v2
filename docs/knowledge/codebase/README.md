@@ -12,6 +12,7 @@ Parallel pipeline runs writing to a single shared file (whether the documentatio
 - Key files touched (paths)
 - Behavior summary (what it does, not how it was built)
 - **Patterns established by this ticket** — the load-bearing design decisions, conventions, invariants. Historically these went into `PROJECT-MEMORY.md`'s "Patterns established" section; they belong here now. One ticket's patterns live in one file.
+- **Lessons learned** — gotchas surfaced during implementation that future tickets should avoid. Historically these went into `docs/lessons.md`; they belong here now (under a "Lessons learned" section). `docs/lessons.md` is frozen as of 2026-05-11.
 - Anything a future session would need to know that isn't obvious from the code
 
 ## What does NOT go here
