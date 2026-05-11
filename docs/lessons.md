@@ -65,6 +65,20 @@ Two design forces pushed the substring-match over a pre-flight `pullRequest(numb
 
 The same shape rule generalizes: when a wrapper's failure has a structured downstream consequence (rollback, alternate path, retry-with-state-change) AND the failure mode is detectable from the error shape, surface it as a typed return rather than a throw. Throws are right when the wrapper's contract is "absence of error means success and the caller has nothing to do on failure but report"; typed results are right when the caller has work to do on each failure mode and you don't want to push the discrimination logic to every consumer.
 
+## Worktree cleanup
+
+### "Best-effort fallback" in a destructive primitive's locator is a foot-gun (#43)
+
+`findCollidingWorktree(porcelain, targetPath)` parses `git worktree list --porcelain` to identify the orphaned entry that's blocking a removal. The first draft included a "best-effort: if no exact match, return the first block's path" fallback — the reasoning was that the recovery should not silently give up.
+
+The reasoning was wrong, and code review caught it (commit `d251f1c`). The first block of `git worktree list --porcelain` is conventionally the repository's main worktree. A parser miss followed by a fallback returning the first block, plumbed straight into `git worktree remove --force`, would force-remove the main repo on every miss. That's a destructive primitive being given license to guess.
+
+The fix is shape, not heuristic: the parser is exact-match-or-null. Callers must treat `null` as "couldn't locate, do nothing more here" and the diagnostic `list --porcelain` call becomes the deepest the recovery goes on a miss. The pure-parser test pins the no-fallback contract by feeding a porcelain stub whose first block names the main repo with target unrelated, asserting `null`. A future "best-effort" simplification fails this test immediately.
+
+The general rule: when a parser feeds a destructive operation, prefer a narrow, refusable return shape (exact match or null) over a permissive one (best guess on miss). The cost of "couldn't locate" propagating through the recovery is bounded — at worst the leak persists until human triage. The cost of an unsafe guess is unbounded — it can destroy the wrong target. Make the conservative case the easy case; force the permissive case to be added at a callsite that has real evidence to constrain the guess.
+
+This is the same shape rule as #6's "use `/^\d+$/` over `parseInt`" lesson: prefer "throws / returns null on ambiguous input" over "silently produces a plausible-looking value." Both fail loudly upstream rather than producing a false-positive that propagates downstream into an irreversible action.
+
 ## Configuration loading
 
 ### `{...fileEnv, ...process.env}` silently nukes `.env` values on `KEY=""` exports (#3)
