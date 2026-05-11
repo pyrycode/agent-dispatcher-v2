@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  type AutoAdvanceState,
-  decideAutoAdvance,
-} from "../../src/pipeline/auto-advance.ts";
+import { type AutoAdvanceState, decideAutoAdvance } from "../../src/pipeline/auto-advance.ts";
 import type { SelectionItem } from "../../src/pipeline/selection.ts";
 
 function mkState(items: SelectionItem[]): AutoAdvanceState {
