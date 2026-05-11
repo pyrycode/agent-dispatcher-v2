@@ -9,8 +9,8 @@ Evergreen project state for `agent-dispatcher-v2`. Per-ticket implementation sum
 - `docs/knowledge/features/` — evergreen feature docs.
 - `docs/knowledge/decisions/` — ADRs, numbered sequentially.
 - `docs/knowledge/architecture/` — system-level design (seed when cross-cutting prose is warranted; module-local context lives in per-ticket summaries).
-- `docs/knowledge/INDEX.md` — one-line summaries of `features/`, `decisions/`, `architecture/`.
-- `docs/lessons.md` — gotchas accumulated across tickets.
+- `docs/knowledge/INDEX.md` — one-line summaries of `features/`, `decisions/`, `architecture/`. Documentation phase is the sole writer.
+- `docs/lessons.md` — **frozen 2026-05-11.** Historical reference only. New lessons go in the relevant ticket's `docs/knowledge/codebase/<N>.md` under a "Lessons learned" section.
 
 ## Write discipline
 
