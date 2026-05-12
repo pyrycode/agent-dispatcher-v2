@@ -31,6 +31,10 @@ describe("SPAWN_ENV_DENYLIST — exact contents pin", () => {
   it("contains exactly the seven dispatcher-internal variables (sorted)", () => {
     expect(Array.from(SPAWN_ENV_DENYLIST).sort()).toEqual(EXPECTED_DENYLIST);
   });
+
+  it("does not include PYRY_PARENT_ITEM_ID (must survive scrubbing — #68)", () => {
+    expect(SPAWN_ENV_DENYLIST.has("PYRY_PARENT_ITEM_ID")).toBe(false);
+  });
 });
 
 describe("scrubSpawnEnv", () => {

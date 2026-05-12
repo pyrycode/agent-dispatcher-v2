@@ -13,6 +13,11 @@
 // spawnClaude itself prepends `-p --output-format stream-json`, so the
 // descriptor's args are the caller-supplied tail only (see
 // src/claude/spawn.ts:60-72).
+//
+// state.parentProjectItemId, when set, is appended to the descriptor's
+// env as PYRY_PARENT_ITEM_ID AFTER scrubEnv runs — see #68 spec for the
+// merge-order rationale (dispatcher-internal state must land in the child
+// regardless of parentEnv contents).
 
 import type { DispatchState } from "./state.ts";
 
@@ -36,9 +41,14 @@ export function prepareAgentSpawn(
   state: DispatchState,
   deps: PrepareAgentSpawnDeps,
 ): AgentSpawnDescriptor {
+  const scrubbed = deps.scrubEnv(deps.parentEnv);
+  const env: NodeJS.ProcessEnv =
+    state.parentProjectItemId === undefined
+      ? scrubbed
+      : { ...scrubbed, PYRY_PARENT_ITEM_ID: state.parentProjectItemId };
   return {
     args: state.args,
-    env: deps.scrubEnv(deps.parentEnv),
+    env,
     cwd: state.worktreePath,
   };
 }
