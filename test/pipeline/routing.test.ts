@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type Agent, decideReworkRouting } from "../../src/pipeline/routing.ts";
+import {
+  type Agent,
+  decideReworkRouting,
+  targetColumnForAgent,
+} from "../../src/pipeline/routing.ts";
+import { COLUMNS } from "../../src/pipeline/transitions.ts";
 
 // Mirrors the needs-rework:* members of Label in transitions.ts:48-51. If a
 // future ticket adds a new needs-rework:<target> to that union, mirror it
@@ -82,5 +87,25 @@ describe("decideReworkRouting — edge cases", () => {
       target: null,
       stripLabels: [],
     });
+  });
+});
+
+describe("targetColumnForAgent", () => {
+  it.each([
+    ["po", "Backlog"],
+    ["architect", "In Architecture"],
+    ["developer", "In Development"],
+    ["code-review", "In Code Review"],
+  ] as const)("maps %s to %s", (agent, expected) => {
+    expect(targetColumnForAgent(agent)).toBe(expected);
+  });
+
+  it("structural invariant: every needs-rework:* label's agent maps to a known Column", () => {
+    for (const label of REWORK_LABELS) {
+      const agent = label.slice("needs-rework:".length) as Agent;
+      const column = targetColumnForAgent(agent);
+      expect(column).toBeTruthy();
+      expect(COLUMNS).toContain(column);
+    }
   });
 });

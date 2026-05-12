@@ -12,7 +12,7 @@
 // Rework routing is the only place that surfaces them, which is why this is
 // a separate function.
 
-import type { Label } from "./transitions.ts";
+import type { Column, Label } from "./transitions.ts";
 
 // Derived from Label so adding a needs-rework target in transitions.ts
 // surfaces in Agent automatically — single source of truth. Yields
@@ -45,4 +45,20 @@ export function decideReworkRouting(labels: readonly string[]): ReworkRouting {
     (l) => l !== reworkLabel && STRIP_PREFIXES.some((px) => l.startsWith(px)),
   );
   return { target, stripLabels };
+}
+
+// Agent → Column the dispatcher routes the ticket back to when this agent
+// is the target of a needs-rework signal. Implicit today in the rework rows
+// of TRANSITIONS (see transitions.ts); lifted into a named mapping so the
+// loop runner doesn't re-derive it and so adding a new Agent member is a
+// TS error here (Record exhaustiveness) instead of a silent miss-route.
+const AGENT_TO_COLUMN: Record<Agent, Column> = {
+  po: "Backlog",
+  architect: "In Architecture",
+  developer: "In Development",
+  "code-review": "In Code Review",
+};
+
+export function targetColumnForAgent(agent: Agent): Column {
+  return AGENT_TO_COLUMN[agent];
 }
