@@ -32,3 +32,4 @@ coverage/
 # Claude Code runtime artifacts
 .prompt-*
 .system-prompt-*
+.dispatcher.lock
