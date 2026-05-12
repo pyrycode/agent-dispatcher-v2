@@ -17,4 +17,11 @@ export interface DispatchState {
   // spawnClaude prepends `-p --output-format stream-json` itself, so this
   // array does NOT include those flags.
   readonly args: readonly string[];
+  // GraphQL ID of the dispatched ticket's project-board item. When set,
+  // prepareAgentSpawn surfaces it to the spawned agent as
+  // PYRY_PARENT_ITEM_ID so PO can position split-child issues relative to
+  // the parent's column slot (issue #68). Optional because not every
+  // dispatch path has the ID at hand — wiring at the dispatch entry point
+  // is #78's job.
+  readonly parentProjectItemId?: string;
 }

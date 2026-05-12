@@ -106,4 +106,36 @@ describe("prepareAgentSpawn", () => {
     expect(result.env.HOME).toBe("/h");
     expect(result.env.FOO).toBe("bar");
   });
+
+  it("env: PYRY_PARENT_ITEM_ID included when state.parentProjectItemId is set (#68)", () => {
+    const { deps } = fakeDeps({ parentEnv: { PATH: "/usr/bin" } });
+    const state = makeState({ parentProjectItemId: "PVTI_lADO_sentinel" });
+
+    const result = prepareAgentSpawn(state, deps);
+
+    expect(result.env.PYRY_PARENT_ITEM_ID).toBe("PVTI_lADO_sentinel");
+    expect(result.env.PATH).toBe("/usr/bin");
+  });
+
+  it("env: PYRY_PARENT_ITEM_ID absent (not empty string) when state.parentProjectItemId is unset (#68)", () => {
+    const { deps } = fakeDeps({ parentEnv: { PATH: "/usr/bin" } });
+
+    const result = prepareAgentSpawn(makeState(), deps);
+
+    expect("PYRY_PARENT_ITEM_ID" in result.env).toBe(false);
+  });
+
+  it("env: post-scrub merge does not re-introduce denylisted keys (#68)", () => {
+    const parentEnv: NodeJS.ProcessEnv = {
+      GITHUB_TOKEN: "secret",
+      PATH: "/usr/bin",
+    };
+    const { deps } = fakeDeps({ parentEnv });
+    const state = makeState({ parentProjectItemId: "PVTI_x" });
+
+    const result = prepareAgentSpawn(state, deps);
+
+    expect("GITHUB_TOKEN" in result.env).toBe(false);
+    expect(result.env.PYRY_PARENT_ITEM_ID).toBe("PVTI_x");
+  });
 });
