@@ -32,6 +32,8 @@ function makeState(overrides?: Partial<DispatchState>): DispatchState {
   return {
     agent: "developer",
     issueNumber: 42,
+    worktreePath: "/tmp/wt-42",
+    args: [],
     ...overrides,
   };
 }
